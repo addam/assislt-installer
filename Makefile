@@ -5,7 +5,7 @@ SERVER_URL ?= http://localhost:5000
 # Override PUBLIC_KEY_HEX after running: python server/sign_installer.py pubkey
 PUBLIC_KEY_HEX ?= 0000000000000000000000000000000000000000000000000000000000000000
 
-BOOTSTRAPPER = server/bootstrapper.exe
+BOOTSTRAPPER = server/get-artikulo.exe
 
 .PHONY: keygen build-windows build-linux server sign
 

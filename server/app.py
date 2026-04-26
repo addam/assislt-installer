@@ -1,16 +1,14 @@
 """
-ZOI Installer Server
+Artikulo Installer Server
 
 Provides:
   GET  /products           — JSON list of available products
   GET  /download/<id>      — serves bootstrapper.exe + sets selected_product cookie
   GET  /get-product        — reads cookie, redirects to bootstrapper's localhost listener
-
-Development file serving (put files in ./files/):
-  GET  /files/<filename>   — serves product installers and .sig files
 """
 
 import json
+import os
 import pathlib
 from urllib.parse import urlparse
 
@@ -21,8 +19,6 @@ app = Flask(__name__)
 
 BASE = pathlib.Path(__file__).parent
 PRODUCTS_FILE = BASE / "products.json"
-BOOTSTRAPPER_PATH = BASE / "bootstrapper.exe"
-FILES_DIR = BASE / "files"
 
 
 def load_products() -> list[dict]:
@@ -30,52 +26,10 @@ def load_products() -> list[dict]:
         return json.load(f)
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
 @app.get("/products")
 def get_products():
     """Return the full product catalogue."""
     return jsonify(load_products())
-
-
-@app.get("/download")
-@app.get("/download/<product_id>")
-def download(product_id: str | None = None):
-    """
-    Serve bootstrapper.exe.  If product_id is provided, set a short-lived
-    cookie so that /get-product can redirect back to the bootstrapper with
-    the right choice without requiring the user to log in.
-    """
-    if not BOOTSTRAPPER_PATH.exists():
-        abort(503, "Bootstrapper binary not yet built; run `make build-windows`")
-
-    if product_id is not None:
-        products = load_products()
-        if not any(p["id"] == product_id for p in products):
-            abort(404, f"Unknown product id: {product_id!r}")
-
-    response = make_response(
-        send_from_directory(
-            BASE, "bootstrapper.exe",
-            as_attachment=True,
-            download_name="installer.exe",
-            mimetype="application/octet-stream",
-        )
-    )
-
-    if product_id is not None:
-        response.set_cookie(
-            "selected_product",
-            product_id,
-            max_age=3600,       # user has 1 hour to run the downloaded exe
-            httponly=True,
-            samesite="Lax",
-            secure=False,       # set to True when deploying over HTTPS
-        )
-
-    return response
 
 
 @app.get("/get-product")
@@ -126,16 +80,33 @@ def get_product():
     return redirect(f"{redirect_uri}{sep}{query}")
 
 
-# ---------------------------------------------------------------------------
-# Development file server (not needed in production with a CDN)
-# ---------------------------------------------------------------------------
+@app.get("/")
+@app.get("/<product_id>")
+def download(product_id=None):
+    """
+    Serve get_artikulo.exe.  If product_id is provided, set a short-lived
+    cookie so that /get-product can redirect back to the bootstrapper with
+    the right choice without requiring the user to log in.
+    """
 
-@app.get("/files/<path:filename>")
-def serve_file(filename: str):
-    if not FILES_DIR.exists():
-        abort(404)
-    return send_from_directory(FILES_DIR, filename)
+    response = redirect("https://artikulo.cz/download/get_artikulo.exe")
+
+    if product_id is not None:
+        products = load_products()
+        if not any(p["id"] == product_id for p in products):
+            abort(404, f"Unknown product id: {product_id!r}")
+        response.set_cookie(
+            "selected_product",
+            product_id,
+            max_age=3600,       # user has 1 hour to run the downloaded exe
+            httponly=True,
+            samesite="Lax",
+            secure=False,       # set to True when deploying over HTTPS
+        )
+
+    return response
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = os.getenv("PORT", 5000)
+    app.run(debug=True, port=port)
