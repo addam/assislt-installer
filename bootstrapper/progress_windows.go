@@ -22,9 +22,8 @@ func showProgress(title, description string, fn func(progressReporter) error) er
 	if err := (MainWindow{
 		AssignTo: &mw,
 		Title:    title,
-		MinSize:  Size{Width: 440, Height: 130},
-		MaxSize:  Size{Width: 440, Height: 130},
-		Layout:   VBox{Margins: Margins{Top: 20, Bottom: 20, Left: 20, Right: 20}, Spacing: 10},
+		MinSize:  Size{Width: 320},
+		Layout:   VBox{Margins: Margins{Top: 10, Bottom: 10, Left: 14, Right: 14}, Spacing: 6},
 		Children: []Widget{
 			Label{Text: description},
 			ProgressBar{
@@ -34,21 +33,24 @@ func showProgress(title, description string, fn func(progressReporter) error) er
 			},
 			Label{
 				AssignTo: &infoLbl,
-				Text:     "",
+				Text:     " ",
 			},
 		},
 	}).Create(); err != nil {
 		return err
 	}
 
-	// Center on primary monitor
+	// Place at top-center of primary monitor and bring to front.
+	// Both GetSystemMetrics and Bounds() work in physical pixels, so the
+	// arithmetic is consistent regardless of DPI scaling.
 	sw := int(win.GetSystemMetrics(win.SM_CXSCREEN))
-	sh := int(win.GetSystemMetrics(win.SM_CYSCREEN))
 	b := mw.Bounds()
-	mw.SetBounds(walk.Rectangle{
-		X: (sw - b.Width) / 2, Y: (sh - b.Height) / 2,
-		Width: b.Width, Height: b.Height,
-	})
+	x := (sw - b.Width) / 2
+	if x < 0 {
+		x = 0
+	}
+	win.SetWindowPos(mw.Handle(), win.HWND_TOP, int32(x), 40, int32(b.Width), int32(b.Height), 0)
+	win.SetForegroundWindow(mw.Handle())
 
 	// Remove resize handle and maximize button: dialog-like, fixed size
 	s := win.GetWindowLong(mw.Handle(), win.GWL_STYLE)
