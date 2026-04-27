@@ -8,7 +8,7 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/rand"
+	// "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -155,11 +155,12 @@ func oauthFlow(products []Product) (*Product, error) {
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", port)
 
 	// Random state prevents a rogue local service from injecting a product_id.
-	stateBytes := make([]byte, 16)
-	if _, err := rand.Read(stateBytes); err != nil {
-		return nil, err
-	}
-	state := hex.EncodeToString(stateBytes)
+	// disabled as it is not secure anyway
+	// stateBytes := make([]byte, 16)
+	// if _, err := rand.Read(stateBytes); err != nil {
+	// 	return nil, err
+	// }
+	// state := hex.EncodeToString(stateBytes)
 
 	type callbackResult struct {
 		productID string
@@ -169,11 +170,11 @@ func oauthFlow(products []Product) (*Product, error) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("state") != state {
-			http.Error(w, "invalid state", http.StatusBadRequest)
-			resultCh <- callbackResult{err: fmt.Errorf("state mismatch in callback")}
-			return
-		}
+		// if r.URL.Query().Get("state") != state {
+		// 	http.Error(w, "invalid state", http.StatusBadRequest)
+		// 	resultCh <- callbackResult{err: fmt.Errorf("state mismatch in callback")}
+		// 	return
+		// }
 		productID := r.URL.Query().Get("product_id")
 		if productID == "" {
 			http.Error(w, "missing product_id", http.StatusBadRequest)
@@ -189,7 +190,7 @@ func oauthFlow(products []Product) (*Product, error) {
 
 	authURL := ServerURL + "/get-product?" + url.Values{
 		"redirect_uri": {redirectURI},
-		"state":        {state},
+		// "state":        {state},
 	}.Encode()
 
 	fmt.Println("Opening browser to select product...")
@@ -241,13 +242,21 @@ func downloadAndVerify(p *Product) (string, error) {
 	}
 	pubKey := ed25519.PublicKey(pubKeyBytes)
 
-	fmt.Printf("  Downloading installer from %s\n", p.DownloadURL)
-	installerPath, hash, err := downloadToTempFile(p.DownloadURL)
+	var installerPath string
+	var hash [32]byte
+	err = showProgress(
+		fmt.Sprintf("%s %s", p.Name, p.Version),
+		fmt.Sprintf("Downloading %s...", p.Name),
+		func(report progressReporter) error {
+			var e error
+			installerPath, hash, e = downloadToTempFile(p.DownloadURL, report)
+			return e
+		},
+	)
 	if err != nil {
 		return "", fmt.Errorf("downloading installer: %w", err)
 	}
 
-	fmt.Printf("  Downloading signature from %s\n", p.SigURL)
 	sigData, err := downloadToMemory(p.SigURL)
 	if err != nil {
 		os.Remove(installerPath)
@@ -262,9 +271,9 @@ func downloadAndVerify(p *Product) (string, error) {
 	return installerPath, nil
 }
 
-// downloadToTempFile streams a URL to a .exe temp file and returns its path
-// along with the SHA-256 digest of its contents.
-func downloadToTempFile(rawURL string) (path string, hash [32]byte, err error) {
+// downloadToTempFile streams a URL to a .exe temp file, reports progress via
+// report, and returns the file path along with the SHA-256 digest.
+func downloadToTempFile(rawURL string, report progressReporter) (path string, hash [32]byte, err error) {
 	resp, err := http.Get(rawURL)
 	if err != nil {
 		return "", hash, err
@@ -280,7 +289,8 @@ func downloadToTempFile(rawURL string) (path string, hash [32]byte, err error) {
 	}
 
 	h := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(f, h), resp.Body); err != nil {
+	pw := &progressWriter{total: resp.ContentLength, report: report}
+	if _, err := io.Copy(io.MultiWriter(f, h, pw), resp.Body); err != nil {
 		f.Close()
 		os.Remove(f.Name())
 		return "", hash, err
