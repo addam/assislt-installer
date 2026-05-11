@@ -1,8 +1,8 @@
-// zoi-bootstrapper: downloads and verifies a signed product installer,
+// assislt-installer: downloads and verifies a signed product installer,
 // sharing SmartScreen filter reputation across many different product installers.
 //
 // Build for Windows:
-//   GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.ServerURL=https://your.server -X main.PublicKeyHex=<hex>" -o ../server/bootstrapper.exe .
+//   GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.ServerURL=https://your.server -X main.PublicKeyHex=<hex>" -o ../server/get_artikulo.exe .
 package main
 
 import (

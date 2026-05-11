@@ -1,4 +1,4 @@
-module zoi-bootstrapper
+module assislt-installer
 
 go 1.22
 
