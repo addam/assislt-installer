@@ -91,18 +91,20 @@ def download(product_id=None):
 
     response = redirect("https://artikulo.cz/download/get_artikulo.exe")
 
+    products = load_products()
     if product_id is not None:
-        products = load_products()
         if not any(p["id"] == product_id for p in products):
             abort(404, f"Unknown product id: {product_id!r}")
-        response.set_cookie(
-            "selected_product",
-            product_id,
-            max_age=3600,       # user has 1 hour to run the downloaded exe
-            httponly=True,
-            samesite="Lax",
-            secure=False,       # set to True when deploying over HTTPS
-        )
+    else:
+        product_id = products[0]["id"]
+    response.set_cookie(
+        "selected_product",
+        product_id,
+        max_age=3600,       # user has 1 hour to run the downloaded exe
+        httponly=True,
+        samesite="Lax",
+        secure=False,       # set to True when deploying over HTTPS
+    )
 
     return response
 
